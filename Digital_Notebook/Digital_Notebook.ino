@@ -35,6 +35,17 @@ const int BUFFER_SIZE = 1000;
 char buffer[BUFFER_SIZE];
 uint16_t bufferIndex = 0;
 
+void addToBuffer(uint8_t ascii) {
+  // wrap back around to the beginning. Screen will be cleared by the later printToScreen call.
+  if (bufferIndex == BUFFER_SIZE) {
+    buffer[0] = '\0';
+    bufferIndex = 0;
+  }
+
+  buffer[bufferIndex] = ascii;
+  bufferIndex++;
+}
+
 class MyEspUsbHost : public EspUsbHost {
   void onKeyboardKey(uint8_t ascii, uint8_t keycode, uint8_t modifier) {
     File file = SD.open("/diary.txt", FILE_APPEND);
@@ -50,20 +61,13 @@ class MyEspUsbHost : public EspUsbHost {
         delay(10);
         digitalWrite(21, HIGH);
 
-        // wrap back around to the beginning. Screen will be cleared by the later printToScreen call.
-        if (bufferIndex == BUFFER_SIZE) {
-          buffer[0] = '\0';
-          bufferIndex = 0;
-        }
-
-        buffer[bufferIndex] = ascii;
-        bufferIndex++;
-
+        addToBuffer(ascii);
         printToScreen(buffer);
       } else if (ascii == '\r' || ascii == '\n') {
       file.println();
-      // TODO: this isn't working -- need to tinker more to figure out how to do a newline on the screen.
-      display.print('\n');
+      // TODO: this may cause double newlines when \r\n is printed (aka on windows)
+      addToBuffer('\n');
+      printToScreen(buffer);
     }
     
     file.close();
