@@ -34,6 +34,13 @@ char buffer[ROW_NUM][COL_NUM];
 uint8_t cursorRow = 0;
 uint8_t cursorCol = 0;
 
+String DIARY_FILE_NAME;
+
+int CURSOR_INTERVAL = 450;
+long lastBlinkMs = 0;
+bool cursorReady = false;
+bool cursorOn = false;
+
 void printToScreen(const char *s) {
   Serial.printf("Displaying: %s\n", s);
   display.clearDisplay();
@@ -74,10 +81,11 @@ void printBuffer() {
   }
 
   display.display();
+  cursorReady = true;
 }
 
 void updateFile() {
-  File file = SD.open("/diary.txt", FILE_WRITE);
+  File file = SD.open(DIARY_FILE_NAME, FILE_WRITE);
 
   for (uint8_t row = 0; row < ROW_NUM; row++) {
     for (uint8_t col = 0; col < COL_NUM; col++) {
@@ -139,6 +147,42 @@ void handleKeypress(uint8_t ascii) {
   updateFile();
 }
 
+String openNextFile() {
+  if (!SD.exists("/digital_notebook/")) {
+    SD.mkdir("/digital_notebook/");
+  }
+
+  String lastFileName = "";
+  File dir = SD.open("/digital_notebook/");
+
+  int largestFileNumber = 0;
+
+  while(true) {
+    String fullName = dir.getNextFileName();
+    if (!fullName || fullName == "") {
+      break;
+    }
+
+    int dotIndex = fullName.indexOf('.');
+    if (dotIndex == -1) {
+      continue;
+    }
+
+    String name = fullName.substring(18, dotIndex);
+
+    int fileNumber = name.toInt();
+    if (fileNumber == 0) {
+      continue;
+    }
+
+    if (fileNumber > largestFileNumber) {
+      largestFileNumber = fileNumber;
+    }
+  }
+
+  return "/digital_notebook/" + String(largestFileNumber + 1) + ".txt"; 
+}
+
 class MyEspUsbHost : public EspUsbHost {
   void onKeyboardKey(uint8_t ascii, uint8_t keycode, uint8_t modifier) {
     handleKeypress(ascii);
@@ -160,38 +204,40 @@ void setup() {
 
   printToScreen("setting up sd card");
 
-  delay(1000);
+  delay(200);
 
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
 
   if (!SD.begin(SD_CS, sdSPI)) {
-    printToScreen("SD card initialization failed!");
+    printToScreen("SD card \ninitialization failed!");
     return;
   }
 
-  Serial.println("SD card initialized successfully!");
-  File file = SD.open("/diary.txt", FILE_WRITE);
-  if (!file) {
-    printToScreen("error: could not create diary.txt");
-  }
+  DIARY_FILE_NAME = openNextFile();
 
   usbHost.begin();
   usbHost.setHIDLocal(HID_LOCAL_US);
 
-  delay(500);
+  delay(200);
 
-  printToScreen("Digital Journal");
-
-  pinMode(21, OUTPUT);
-  digitalWrite(21, LOW);
-  delay(200);
-  digitalWrite(21, HIGH);
-  delay(200);
-  digitalWrite(21, LOW);
-  delay(200);
-  digitalWrite(21, HIGH);
+  printToScreen(("Your Digital Journal\n\nSaving to " + DIARY_FILE_NAME.substring(18) + "\n\n" + ":)").c_str());
 }
 
 void loop() {
   usbHost.task();
+
+  if (cursorReady) {
+    long now = millis();
+    if (now - lastBlinkMs >= CURSOR_INTERVAL) {
+      lastBlinkMs = now;
+      cursorOn = !cursorOn;
+
+      // needed because the user is always typing on the last row
+      // after we go past the first page.
+      int row = cursorRow <= 7 ? cursorRow : 7;
+
+      display.drawRect(cursorCol * 6, row * 8, 1, 8, cursorOn ? SSD1306_WHITE : SSD1306_BLACK);
+      display.display();
+    }
+  }
 }
