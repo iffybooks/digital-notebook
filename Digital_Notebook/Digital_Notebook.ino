@@ -41,6 +41,10 @@ long lastBlinkMs = 0;
 bool cursorReady = false;
 bool cursorOn = false;
 
+long lastKeyPress = millis();
+long keyPressCount = 0;
+long lastKeyPressCount = 0;
+
 void printToScreen(const char *s) {
   Serial.printf("Displaying: %s\n", s);
   display.clearDisplay();
@@ -131,6 +135,9 @@ void handleKeypress(uint8_t ascii) {
     }
 
     buffer[cursorRow][cursorCol] = '\0';
+    lastKeyPress = millis();
+    keyPressCount++;
+    
   }
 
   // TODO: ideally would have a pageup/pagedown handler as well
@@ -144,7 +151,8 @@ void handleKeypress(uint8_t ascii) {
   }
 
   printBuffer();
-  updateFile();
+
+  lastKeyPress = millis();
 }
 
 String openNextFile() {
@@ -220,24 +228,14 @@ void setup() {
 
   delay(200);
 
-  printToScreen(("Your Digital Journal\n\nSaving to " + DIARY_FILE_NAME.substring(18) + "\n\n" + ":)").c_str());
+  printToScreen(("Digital Notebook\n\nSaving to " + DIARY_FILE_NAME.substring(18) + "\n\n" + ":)").c_str());
 }
 
 void loop() {
   usbHost.task();
-
-  if (cursorReady) {
-    long now = millis();
-    if (now - lastBlinkMs >= CURSOR_INTERVAL) {
-      lastBlinkMs = now;
-      cursorOn = !cursorOn;
-
-      // needed because the user is always typing on the last row
-      // after we go past the first page.
-      int row = cursorRow <= 7 ? cursorRow : 7;
-
-      display.drawRect(cursorCol * 6, row * 8, 1, 8, cursorOn ? SSD1306_WHITE : SSD1306_BLACK);
-      display.display();
-    }
+  if (((millis()-lastKeyPress) > 3000) && (keyPressCount != lastKeyPressCount)){
+    updateFile();
+    lastKeyPressCount = keyPressCount;
   }
+
 }
