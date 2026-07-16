@@ -1,3 +1,11 @@
+*~
+*.swp
+*.swo
+.vscode
+testFileview
+emulator
+Emulator/digital_notebook
 .DS_Store
 ./Digital_Notebook_Assembly_Steps/*
 ./graphics/*
+temp.txt
